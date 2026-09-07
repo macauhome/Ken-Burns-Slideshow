@@ -6,7 +6,9 @@ Public Class OptWindow
     Sub New()
         ' This call is required by the designer.
         InitializeComponent()
-        Owner = Application.Current.MainWindow
+        If Application.Current IsNot Nothing AndAlso Application.Current.MainWindow IsNot Nothing Then
+            Owner = Application.Current.MainWindow
+        End If
     End Sub
 
     Private Sub Window_Loaded(sender As Object, e As RoutedEventArgs)
@@ -173,7 +175,7 @@ Public Class OptWindow
         config.Add(New XElement("NoLoop", CB_NoLoop.IsChecked.Value))
 
         'copy slides data if exists
-        If My.Computer.FileSystem.FileExists(MainWindow.config_path) Then
+        If IO.File.Exists(MainWindow.config_path) Then
             Dim ori_config = XElement.Load(MainWindow.config_path)
             If ori_config.Elements("DocumentElement").Any Then
                 config.Add(ori_config.Element("DocumentElement"))
@@ -184,8 +186,8 @@ Public Class OptWindow
         If Interop.ComponentDispatcher.IsThreadModal Then DialogResult = True Else Close()
     End Sub
 
-    Private Function GetTargetLB(sender As Object) As ListBox
-        Dim lb As ListBox = Nothing
+    Private Function GetTargetLB(sender As Object) As System.Windows.Controls.ListBox
+        Dim lb As System.Windows.Controls.ListBox = Nothing
         Select Case sender.Name
             Case NameOf(Btn_Img_Add), NameOf(Btn_Img_Edit), NameOf(Btn_Img_Rmv), NameOf(LB_ImgFolder)
                 lb = LB_ImgFolder

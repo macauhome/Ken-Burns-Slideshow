@@ -1,7 +1,47 @@
 ﻿Imports System.ComponentModel
+Imports System.Runtime.InteropServices
 Imports System.Threading
+Imports System.Windows.Interop
 
 Class MainWindow
+    Private ReadOnly previewParentHwnd As IntPtr
+    Private ReadOnly isPreviewMode As Boolean
+
+    <StructLayout(LayoutKind.Sequential)> Private Structure RECT
+        Public Left As Integer
+        Public Top As Integer
+        Public Right As Integer
+        Public Bottom As Integer
+    End Structure
+
+    Private Const GWL_STYLE As Integer = -16
+    Private Const WS_CHILD As Integer = &H40000000
+    Private Const WS_CLIPSIBLINGS As Integer = &H400
+    Private Const WS_CLIPCHILDREN As Integer = &H200
+    Private Const SWP_NOZORDER As Integer = &H4
+    Private Const SWP_NOACTIVATE As Integer = &H10
+
+    <DllImport("user32.dll", SetLastError:=True)> Private Shared Function SetParent(ByVal hWndChild As IntPtr, ByVal hWndNewParent As IntPtr) As IntPtr
+    End Function
+
+    <DllImport("user32.dll", SetLastError:=True)> Private Shared Function GetClientRect(ByVal hWnd As IntPtr, ByRef lpRect As RECT) As Boolean
+    End Function
+
+    <DllImport("user32.dll", SetLastError:=True)> Private Shared Function SetWindowLong(ByVal hWnd As IntPtr, ByVal nIndex As Integer, ByVal dwNewLong As Integer) As Integer
+    End Function
+
+    <DllImport("user32.dll", SetLastError:=True)> Private Shared Function SetWindowPos(ByVal hWnd As IntPtr, ByVal hWndInsertAfter As IntPtr, ByVal X As Integer, ByVal Y As Integer, ByVal cx As Integer, ByVal cy As Integer, ByVal uFlags As Integer) As Boolean
+    End Function
+
+    Public Sub New()
+        InitializeComponent()
+    End Sub
+
+    Public Sub New(ByVal parentHwnd As IntPtr)
+        Me.New()
+        previewParentHwnd = parentHwnd
+        isPreviewMode = parentHwnd <> IntPtr.Zero
+    End Sub
     Public Shared ListOfPic As New System.Data.DataTable("ImageList")
     Public Shared PicFormats() As String = {".jpg", ".jpeg", ".bmp", ".png", ".tif", ".tiff"}
     Private BGMFormats() As String = {".mp3", ".wma", ".m4a", ".aac", ".wav", "asf"}
@@ -76,6 +116,25 @@ Class MainWindow
     Public Event ImageAnimationEnd()
 
     Private Sub Window_Loaded(sender As Object, e As RoutedEventArgs)
+        If isPreviewMode AndAlso previewParentHwnd <> IntPtr.Zero Then
+            Dim previewRect As RECT
+            GetClientRect(previewParentHwnd, previewRect)
+            Dim previewWidth As Integer = previewRect.Right - previewRect.Left
+            Dim previewHeight As Integer = previewRect.Bottom - previewRect.Top
+
+            Me.Left = previewRect.Left
+            Me.Top = previewRect.Top
+            Me.Width = previewWidth
+            Me.Height = previewHeight
+            Me.ResizeMode = ResizeMode.NoResize
+            Me.ShowInTaskbar = False
+
+            Dim hWnd As IntPtr = New WindowInteropHelper(Me).Handle
+            SetParent(hWnd, previewParentHwnd)
+            SetWindowLong(hWnd, GWL_STYLE, WS_CHILD Or WS_CLIPSIBLINGS Or WS_CLIPCHILDREN)
+            SetWindowPos(hWnd, IntPtr.Zero, 0, 0, previewWidth, previewHeight, SWP_NOZORDER Or SWP_NOACTIVATE)
+        End If
+
 #If DEBUG Then
         Topmost = False
 #End If
@@ -108,12 +167,12 @@ Class MainWindow
         'Dim cmdargs() As String = {"asdasd", "F:\Pictures\Giant"}
         Dim config As XElement
         If cmdargs.Length > 1 Then 'parametered start
-            If My.Computer.FileSystem.FileExists(config_instant_path) Then
+            If IO.File.Exists(config_instant_path) Then
                 config = XElement.Load(config_instant_path)
                 config.Element("PicDir").RemoveAll()
                 config.Element("Music").RemoveAll()
                 config_path = config_instant_path
-            ElseIf My.Computer.FileSystem.FileExists(config_path) Then
+            ElseIf IO.File.Exists(config_path) Then
                 config = XElement.Load(config_path)
                 config.Element("PicDir").RemoveAll()
                 config.Element("Music").RemoveAll()
@@ -208,7 +267,7 @@ Class MainWindow
             If folders_image.Count > 0 Then
                 Dim tmplst As New List(Of Data.DataRow)
                 For Each row As Data.DataRow In ListOfPic.Rows
-                    If Not My.Computer.FileSystem.FileExists(row("Path")) Then
+                    If Not IO.File.Exists(row("Path")) Then
                         'remove when file doesnt exist
                         tmplst.Add(row)
                     Else
@@ -462,10 +521,10 @@ Class MainWindow
     Private Sub FillPic(PicDir_ele As XElement)
         Dim searchopt = If(recursive_folder, FileIO.SearchOption.SearchAllSubDirectories, FileIO.SearchOption.SearchTopLevelOnly)
         For Each ele In PicDir_ele.Elements
-            If My.Computer.FileSystem.DirectoryExists(ele.Value) Then
+            If IO.Directory.Exists(ele.Value) Then
                 folders_image.Add(ele.Value)
-                For Each f In My.Computer.FileSystem.GetFiles(ele.Value, searchopt)
-                    Dim filefullname = My.Computer.FileSystem.GetName(f)
+                For Each f In IO.Directory.GetFiles(ele.Value, "*.*", searchopt)
+                    Dim filefullname = IO.Path.GetFileName(f)
                     Dim filename = IO.Path.GetFileNameWithoutExtension(filefullname)
                     Dim ext = IO.Path.GetExtension(filefullname)
                     If PicFormats.Contains(ext.ToLower) Then
@@ -493,9 +552,9 @@ Class MainWindow
     Private Sub FillMusic(Music_ele As XElement)
         Dim searchopt = If(recursive_music, FileIO.SearchOption.SearchAllSubDirectories, FileIO.SearchOption.SearchTopLevelOnly)
         For Each ele In Music_ele.Elements
-            If My.Computer.FileSystem.DirectoryExists(ele.Value) Then
+            If IO.Directory.Exists(ele.Value) Then
                 folders_music.Add(ele.Value)
-                For Each f In My.Computer.FileSystem.GetFiles(ele.Value, searchopt)
+                For Each f In IO.Directory.GetFiles(ele.Value, "*.*", searchopt)
                     Dim ext = IO.Path.GetExtension(f)
                     If BGMFormats.Contains(ext.ToLower) Then
                         ListOfMusic.Add(f)
@@ -1125,7 +1184,7 @@ Class MainWindow
         End Select
     End Sub
 
-    Private Sub Window_PreviewKeyDown(sender As Object, e As KeyEventArgs)
+    Private Sub Window_PreviewKeyDown(sender As Object, e As System.Windows.Input.KeyEventArgs)
         If e.Key = Key.F12 Then
             Dim optwin As New OptWindow
             optwin.ShowDialog()

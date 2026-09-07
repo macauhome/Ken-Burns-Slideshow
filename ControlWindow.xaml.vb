@@ -97,7 +97,7 @@
         DirectCast(Owner, MainWindow).Close()
     End Sub
 
-    Private Sub Window_PreviewKeyDown(sender As Object, e As KeyEventArgs)
+    Private Sub Window_PreviewKeyDown(sender As Object, e As System.Windows.Input.KeyEventArgs)
         If e.Key = Key.Escape Then
             Hide()
         ElseIf e.Key = Key.P Then
